@@ -647,7 +647,7 @@ def download(*,
                                        dataset_dir=target_dir)
 
             if local_tag is None:
-                tqdm.write('Cannot determine local revision of the dataset ,'
+                tqdm.write('Cannot determine local revision of the dataset, '
                            'and the target directory is not empty. If the '
                            'download fails, you may want to try again with a '
                            'fresh (empty) target directory.')
