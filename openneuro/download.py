@@ -7,11 +7,16 @@ import asyncio
 from pathlib import Path
 import string
 import json
-from typing import Optional, Iterable, Union
+from typing import Optional, Union
 if sys.version_info >= (3, 8):
     from typing import Literal
 else:
     from typing_extensions import Literal
+
+if sys.version_info >= (3, 9):
+    from collections.abc import Iterable, Generator
+else:
+    from typing import Iterable, Generator  # Deprecated since 3.9
 
 import requests
 import httpx
@@ -176,7 +181,8 @@ def _get_download_metadata(*,
 
     if request_timed_out and max_retries > 0:
         tqdm.write(
-            _unicode('Request timed out while fetching metadata, retrying'))
+            _unicode('Request timed out while fetching metadata, retrying')
+        )
         asyncio.sleep(retry_backoff)
         max_retries -= 1
         retry_backoff *= 2
@@ -363,7 +369,8 @@ async def _retry_download(
 ) -> None:
     tqdm.write(
         _unicode(f'Request timed out while downloading {outfile}, retrying in '
-                 f'{retry_backoff} sec', emoji='🔄'))
+                 f'{retry_backoff} sec', emoji='🔄')
+    )
     await asyncio.sleep(retry_backoff)
     max_retries -= 1
     retry_backoff *= 2
@@ -437,7 +444,7 @@ async def _retrieve_and_write_to_disk(
 
 async def _download_files(*,
                           target_dir: Path,
-                          files: Iterable,
+                          files: Iterable[dict],
                           verify_hash: bool,
                           verify_size: bool,
                           max_retries: int,
@@ -517,8 +524,14 @@ def _unicode(msg, *, emoji=' ', end='…'):
     return msg
 
 
-def _iterate_filenames(files, *, dataset_id, tag, max_retries, indent=' ',
-                       root=''):
+def _iterate_filenames(
+    files: Iterable[dict],
+    *,
+    dataset_id: str,
+    tag: str,
+    max_retries: int,
+    root: str = ''
+) -> Generator[dict, None, None]:
     """Iterate over all files in a dataset, yielding filenames."""
     directories = list()
     for entity in files:
@@ -528,16 +541,22 @@ def _iterate_filenames(files, *, dataset_id, tag, max_retries, indent=' ',
             directories.append(entity)
         else:
             yield entity
+
     for directory in directories:
         # Query filenames
         this_dir = directory['filename']
-        tqdm.write(_unicode(f'{indent}{this_dir}', emoji=' ', end=''))
         metadata = _get_download_metadata(
             dataset_id=dataset_id, tag=tag, tree=f'"{directory["id"]}"',
-            max_retries=max_retries)
+            max_retries=max_retries
+        )
+
         for path in _iterate_filenames(
-                metadata['files'], dataset_id=dataset_id, tag=tag,
-                max_retries=max_retries, indent=f'{indent}│ ', root=this_dir):
+            metadata['files'],
+            dataset_id=dataset_id,
+            tag=tag,
+            max_retries=max_retries,
+            root=this_dir
+        ):
             yield path
 
 
@@ -640,10 +659,16 @@ def download(*,
     filenames = []
     these_files = metadata['files']
     del metadata
-    msg = f'Traversing directories for {dataset} (this can take a while)'
-    tqdm.write(_unicode(msg, emoji='📁'))
-    for file in _iterate_filenames(these_files, dataset_id=dataset, tag=tag,
-                                   max_retries=max_retries):
+
+    for file in tqdm(
+        _iterate_filenames(
+            these_files, dataset_id=dataset, tag=tag, max_retries=max_retries
+        ),
+        desc=_unicode(
+            f'Traversing directories for {dataset}', end='', emoji='📁'
+        ),
+        unit=' entities'
+    ):
         filename: str = file['filename']  # TODO properly define metadata type
         filenames.append(filename)
 
@@ -715,7 +740,8 @@ def download(*,
         asyncio.run(_download_files(**kwargs))
 
     tqdm.write(
-        _unicode(f'Finished downloading {dataset}.\n', emoji='✅', end=''))
+        _unicode(f'Finished downloading {dataset}.\n', emoji='✅', end='')
+    )
     tqdm.write(_unicode('Please enjoy your brains.\n', emoji='🧠', end=''))
 
 
