@@ -516,7 +516,12 @@ def _get_local_tag(
     return local_version
 
 
-def _unicode(msg, *, emoji=' ', end='…'):
+def _unicode(
+    msg: str,
+    *,
+    emoji: str = ' ',
+    end: str = '…'
+) -> str:
     if stdout_unicode:
         msg = f'{emoji} {msg} {end}'
     elif end == '…':
